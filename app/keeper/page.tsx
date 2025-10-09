@@ -9,7 +9,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { StatusSelector } from "./status-selector";
 import { DatePicker } from "@/components/date-picker";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Item,
   ItemActions,
@@ -19,7 +19,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Edit, Plus, Trash } from "lucide-react";
-import { format, isBefore } from "date-fns";
+import { format, isBefore, isSameDay } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -71,6 +71,30 @@ export default function Home() {
   const [activeTodo, setActiveTodo] = useState<Todo | null>(null);
   const [todos, setTodos] = useState<Todo[]>([]);
 
+  const [searchText, setSearchText] = useState("");
+
+  useEffect(() => {
+    const stored = localStorage.getItem("todos");
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        const restored = parsed.map((t: any) => ({
+          ...t,
+          startDate: t.startDate ? new Date(t.startDate) : undefined,
+          dueDate: t.dueDate ? new Date(t.dueDate) : undefined,
+          createdAt: t.createdAt ? new Date(t.createdAt) : undefined,
+        }));
+        setTodos(restored);
+      } catch (e) {
+        console.error("Failed to parse todos from localStorage", e);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("todos", JSON.stringify(todos));
+  }, [todos]);
+
   const handleSave = useCallback(
     (todo: Omit<Todo, "id"> & { id?: number | null }) => {
       if (todo.id) {
@@ -93,22 +117,33 @@ export default function Home() {
   );
 
   const handleDelete = (id: number) =>
-    setTodos((prev) => {
-      return prev.filter((t) => {
-        if (t.id === id) {
-          return false;
-        } else {
-          return true;
-        }
-      });
+    setTodos((prev) => prev.filter((t) => t.id !== id));
+
+  const filteredTodos = useMemo(() => {
+    return todos.filter((todo) => {
+      const matchesSearch =
+        searchText.trim() === "" ||
+        todo.title.toLowerCase().includes(searchText.toLowerCase());
+
+      const matchesStatus =
+        !status || status === "pending" ? true : todo.status === status;
+
+      const matchesDate = !date || isSameDay(todo.startDate, date);
+
+      return matchesSearch && matchesStatus && matchesDate;
     });
+  }, [todos, searchText, status, date]);
 
   return (
     <main className="flex flex-col gap-4 items-center p-6">
       <h1>Todo List App</h1>
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
-          <Input placeholder="Search..." />
+          <Input
+            placeholder="Search..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+          />
           <StatusSelector value={status} setValue={setStatus} />
         </div>
         <div className="self-end">
@@ -124,7 +159,8 @@ export default function Home() {
             <Plus className="size-4" /> Create Todo
           </Button>
         </div>
-        {todos.map((todo) => (
+
+        {filteredTodos.map((todo) => (
           <TodoCard
             key={todo.id}
             todo={todo}
@@ -158,13 +194,11 @@ function TodoCard({
   return (
     <Item variant={"outline"}>
       <ItemContent>
-        {/* <ItemHeader> */}
         <div className="flex items-center gap-4">
           <ItemTitle>{todo.title}</ItemTitle>
           <Badge variant={"secondary"}>{todo.status}</Badge>
         </div>
         <ItemDescription>{todo.description}</ItemDescription>
-        {/* </ItemHeader> */}
       </ItemContent>
       <ItemActions>
         <Button
@@ -287,7 +321,6 @@ function CreateEditTodoDialog({
                 name="startDate"
                 render={({ field }) => (
                   <FormItem>
-                    {/* <FormLabel>Start Date</FormLabel> */}
                     <FormControl>
                       <DatePicker
                         label="Start Date"

@@ -37,9 +37,14 @@ const frameworks = [
   },
 ];
 
-export function RoleSelector() {
+export function RoleSelector({
+  value,
+  setValue,
+}: {
+  value: string;
+  setValue: (value: string) => void;
+}) {
   const [open, setOpen] = React.useState(false);
-  const [value, setValue] = React.useState("");
   const foundFramework = React.useMemo(() => {
     if (value) {
       return frameworks.find((framework) => framework.value === value);
